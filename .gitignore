@@ -8,6 +8,7 @@ __pycache__/
 .venv/
 venv/
 env/
+.env
 
 # Packaging
 build/
@@ -23,3 +24,7 @@ dist/
 .DS_Store
 .idea/
 .vscode/
+
+#Others
+data/
+fgdm_out/

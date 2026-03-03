@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date
-from typing import Sequence
+from typing import Mapping, Sequence
 
 
 @dataclass(frozen=True)
@@ -34,13 +34,34 @@ class DegradationEvent:
     baseline: float
     current: float
     delta: float
+    rel_delta: float
+
+
+@dataclass(frozen=True)
+class RollingPoint:
+
+    window_end: date
+    mae: float
+    rmse: float
+    mape: float
+    n_points: int
 
 
 @dataclass(frozen=True)
 class MonitoringReport:
     run_id: str
-    generated_at: str  # ISO-8601 string kept as string for deterministic serialization
+    generated_at: str  # ISO-8601 string (UTC) kept as string for deterministic serialization
+
     overall_metrics: MetricResult
+
+    baseline_metrics: MetricResult
+    current_metrics: MetricResult
+
+    rolling_window_days: int
+    baseline_window_days: int
+    rolling_series: Sequence[RollingPoint]
+
     degradation_events: Sequence[DegradationEvent]
-    drift: dict[str, DriftResult]  # keyed by feature/series name
+
+    drift: Mapping[str, DriftResult]  # keyed by series name (e.g., "residual")
     notes: Sequence[str]
