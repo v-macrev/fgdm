@@ -8,6 +8,10 @@ def render_markdown(report: dict[str, Any]) -> str:
     run_id = str(report.get("run_id", ""))
     generated_at = str(report.get("generated_at", ""))
 
+    quality_sev = str((report.get("quality_severity") or ""))
+    drift_sev = str((report.get("drift_severity") or ""))
+    overall_sev = str((report.get("overall_severity") or ""))
+
     overall = report.get("overall_metrics", {}) or {}
     baseline = report.get("baseline_metrics", {}) or {}
     current = report.get("current_metrics", {}) or {}
@@ -16,10 +20,10 @@ def render_markdown(report: dict[str, Any]) -> str:
     baseline_window_days = int(report.get("baseline_window_days", 0) or 0)
 
     drift = report.get("drift", {}) or {}
-    residual = drift.get("residual", {}) or {}
-
     events = report.get("degradation_events", []) or []
     rolling_series = report.get("rolling_series", []) or []
+    offenders = report.get("top_offenders", []) or []
+    notes = report.get("notes", []) or []
 
     def f6(x: Any) -> str:
         return f"{float(x):.6f}"
@@ -29,6 +33,9 @@ def render_markdown(report: dict[str, Any]) -> str:
     lines.append("")
     lines.append(f"- run_id: `{run_id}`")
     lines.append(f"- generated_at (UTC): `{generated_at}`")
+    lines.append(f"- quality_severity: `{quality_sev}`")
+    lines.append(f"- drift_severity: `{drift_sev}`")
+    lines.append(f"- overall_severity: `{overall_sev}`")
     lines.append("")
 
     lines.append("## Overall metrics")
@@ -49,10 +56,17 @@ def render_markdown(report: dict[str, Any]) -> str:
     lines.append(f"- Current  MAPE: {f6(current.get('mape', 0.0))}")
     lines.append("")
 
-    lines.append("## Drift (residual)")
-    lines.append(f"- KS stat: {f6(residual.get('ks_stat', 0.0))}")
-    lines.append(f"- KS p-value: {float(residual.get('ks_pvalue', 0.0)):.6g}")
-    lines.append(f"- PSI: {f6(residual.get('psi', 0.0))}")
+    lines.append("## Drift")
+    if not drift:
+        lines.append("_No drift series computed._")
+    else:
+        lines.append("| series | KS stat | KS p-value | PSI |")
+        lines.append("|---|---:|---:|---:|")
+        for name in sorted(drift.keys()):
+            d = drift.get(name, {}) or {}
+            lines.append(
+                f"| {name} | {f6(d.get('ks_stat', 0.0))} | {float(d.get('ks_pvalue', 0.0)):.6g} | {f6(d.get('psi', 0.0))} |"
+            )
     lines.append("")
 
     lines.append("## Rolling series (tail)")
@@ -83,7 +97,19 @@ def render_markdown(report: dict[str, Any]) -> str:
             )
     lines.append("")
 
-    notes = report.get("notes", []) or []
+    lines.append("## Top offenders (current window)")
+    if not offenders:
+        lines.append("_No offenders (or insufficient per-key points)._")
+    else:
+        lines.append("| rank | cd_key | n_points | MAE | RMSE | MAPE |")
+        lines.append("|---:|---|---:|---:|---:|---:|")
+        for i, o in enumerate(offenders, start=1):
+            lines.append(
+                f"| {i} | {o.get('cd_key','')} | {int(o.get('n_points',0))} | "
+                f"{f6(o.get('mae',0.0))} | {f6(o.get('rmse',0.0))} | {f6(o.get('mape',0.0))} |"
+            )
+    lines.append("")
+
     if notes:
         lines.append("## Notes")
         for n in notes:

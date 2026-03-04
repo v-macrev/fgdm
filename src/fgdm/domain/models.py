@@ -4,6 +4,8 @@ from dataclasses import dataclass
 from datetime import date
 from typing import Mapping, Sequence
 
+from fgdm.domain.governance import Severity
+
 
 @dataclass(frozen=True)
 class CanonicalRow:
@@ -39,7 +41,6 @@ class DegradationEvent:
 
 @dataclass(frozen=True)
 class RollingPoint:
-
     window_end: date
     mae: float
     rmse: float
@@ -48,9 +49,18 @@ class RollingPoint:
 
 
 @dataclass(frozen=True)
+class Offender:
+    cd_key: str
+    n_points: int
+    mae: float
+    rmse: float
+    mape: float
+
+
+@dataclass(frozen=True)
 class MonitoringReport:
     run_id: str
-    generated_at: str  # ISO-8601 string (UTC) kept as string for deterministic serialization
+    generated_at: str  # ISO-8601 UTC
 
     overall_metrics: MetricResult
 
@@ -63,5 +73,12 @@ class MonitoringReport:
 
     degradation_events: Sequence[DegradationEvent]
 
-    drift: Mapping[str, DriftResult]  # keyed by series name (e.g., "residual")
+    drift: Mapping[str, DriftResult]  # e.g., residual, y, y_hat
+
+    quality_severity: Severity
+    drift_severity: Severity
+    overall_severity: Severity
+
+    top_offenders: Sequence[Offender]
+
     notes: Sequence[str]

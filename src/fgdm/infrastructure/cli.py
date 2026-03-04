@@ -8,10 +8,12 @@ from fgdm.application.dto import MonitoringRequest
 from fgdm.application.monitoring_service import run_monitoring
 from fgdm.domain.drift import DriftConfig
 from fgdm.domain.errors import FGDMError
+from fgdm.domain.governance import PolicyConfig
 from fgdm.domain.rolling import RollingConfig
 from fgdm.infrastructure.io import CanonicalCSVConfig, load_canonical_csv
 from fgdm.infrastructure.reporting.json_reporter import write_json
 from fgdm.infrastructure.reporting.markdown_reporter import write_markdown
+
 
 def _build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
@@ -30,6 +32,7 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Override generated_at (ISO-8601). If omitted, uses SOURCE_DATE_EPOCH or current UTC.",
     )
 
+    # CSV config
     p.add_argument("--cd-key-col", type=str, default="cd_key")
     p.add_argument("--ds-col", type=str, default="ds")
     p.add_argument("--y-col", type=str, default="y")
@@ -37,6 +40,7 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("--delimiter", type=str, default=",")
     p.add_argument("--encoding", type=str, default="utf-8")
 
+    # Rolling config
     p.add_argument("--rolling-window-days", type=int, default=7)
     p.add_argument("--baseline-window-days", type=int, default=28)
     p.add_argument("--min-points-per-window", type=int, default=30)
@@ -45,7 +49,26 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("--degradation-abs", type=float, default=0.0)
     p.add_argument("--degradation-rel", type=float, default=0.2)
 
+    # Drift config
     p.add_argument("--psi-bins", type=int, default=10)
+    p.add_argument(
+        "--drift-series",
+        type=str,
+        default="residual",
+        help="Comma-separated: residual,y,y_hat",
+    )
+
+    # Policy config (severity)
+    p.add_argument("--quality-warn-rel", type=float, default=0.2)
+    p.add_argument("--quality-crit-rel", type=float, default=0.5)
+
+    p.add_argument("--drift-warn-psi", type=float, default=0.2)
+    p.add_argument("--drift-crit-psi", type=float, default=0.5)
+
+    p.add_argument("--drift-warn-ks-p", type=float, default=0.05)
+    p.add_argument("--drift-crit-ks-p", type=float, default=0.01)
+
+    p.add_argument("--top-offenders-n", type=int, default=10)
 
     return p
 
@@ -87,11 +110,25 @@ def main(argv: list[str] | None = None) -> int:
         )
         drift = DriftConfig(psi_bins=args.psi_bins)
 
+        policy = PolicyConfig(
+            degradation_warn_rel=args.quality_warn_rel,
+            degradation_crit_rel=args.quality_crit_rel,
+            drift_warn_psi=args.drift_warn_psi,
+            drift_crit_psi=args.drift_crit_psi,
+            drift_warn_ks_pvalue=args.drift_warn_ks_p,
+            drift_crit_ks_pvalue=args.drift_crit_ks_p,
+            top_offenders_n=args.top_offenders_n,
+        )
+
+        drift_series = [s.strip() for s in (args.drift_series or "").split(",") if s.strip()]
+
         req = MonitoringRequest(
             run_id=args.run_id,
             canonical_rows=rows,
             rolling=rolling,
             drift=drift,
+            policy=policy,
+            drift_series=drift_series,
         )
 
         res = run_monitoring(req, generated_at=args.generated_at)
@@ -102,7 +139,6 @@ def main(argv: list[str] | None = None) -> int:
         write_json(res.report_dict, json_path)
         write_markdown(res.report_dict, md_path)
 
-        # CLI output: minimal, stable
         print(f"Wrote JSON: {json_path}")
         print(f"Wrote Markdown: {md_path}")
         return 0
@@ -110,7 +146,7 @@ def main(argv: list[str] | None = None) -> int:
     except FGDMError as e:
         print(f"FGDM error: {e}", file=sys.stderr)
         return 2
-    except Exception as e:  # explicit non-domain failure
+    except Exception as e:
         print(f"Unexpected error: {e}", file=sys.stderr)
         return 3
 
