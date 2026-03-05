@@ -20,12 +20,16 @@ from fgdm.domain.models import (
     MetricResult,
     MonitoringReport,
     Offender,
+    PerKeyQuality,
 )
 from fgdm.domain.rolling import (
     build_rolling_series,
     compute_metrics,
     split_baseline_current_days,
 )
+
+
+REPORT_SCHEMA_VERSION = "1.0"
 
 
 def _iso_utc_generated_at(explicit: str | None) -> str:
@@ -53,14 +57,10 @@ def _require_rows(rows: Iterable[CanonicalRow]) -> list[CanonicalRow]:
     return lst
 
 
-def _index_rows(rows: list[CanonicalRow]) -> tuple[list, dict, dict, dict, list[float], list[float]]:
+def _index_rows(rows: list[CanonicalRow]) -> tuple[list, dict, dict, list[float], list[float]]:
     days: list = []
     y_by_day: dict = {}
     yhat_by_day: dict = {}
-
-    # by (day, key) to enable per-key extraction on current window
-    y_by_day_key: dict[tuple, list[float]] = {}
-    yhat_by_day_key: dict[tuple, list[float]] = {}
 
     y_all: list[float] = []
     yhat_all: list[float] = []
@@ -71,14 +71,10 @@ def _index_rows(rows: list[CanonicalRow]) -> tuple[list, dict, dict, dict, list[
         y_by_day.setdefault(r.ds, []).append(float(r.y))
         yhat_by_day.setdefault(r.ds, []).append(float(r.y_hat))
 
-        k = (r.ds, r.cd_key)
-        y_by_day_key.setdefault(k, []).append(float(r.y))
-        yhat_by_day_key.setdefault(k, []).append(float(r.y_hat))
-
         y_all.append(float(r.y))
         yhat_all.append(float(r.y_hat))
 
-    return days, y_by_day, yhat_by_day, y_by_day_key, y_all, yhat_all
+    return days, y_by_day, yhat_by_day, y_all, yhat_all
 
 
 def _collect_for_days(y_by_day: dict, yhat_by_day: dict, target_days: list) -> tuple[list[float], list[float], list[float]]:
@@ -120,7 +116,6 @@ def _normalize_series_names(series: Iterable[str]) -> list[str]:
         out.append(name)
     if not out:
         raise ValidationError("drift_series must include at least one of: residual, y, y_hat.")
-    # deterministic order: residual first, then y, then y_hat if present
     order = {"residual": 0, "y": 1, "y_hat": 2}
     return sorted(set(out), key=lambda x: order[x])
 
@@ -133,7 +128,6 @@ def _compute_top_offenders_current_window(
     min_points: int,
     top_n: int,
 ) -> list[Offender]:
-    # group by cd_key, only using current window days
     y_by_key: dict[str, list[float]] = {}
     yhat_by_key: dict[str, list[float]] = {}
 
@@ -145,7 +139,7 @@ def _compute_top_offenders_current_window(
         yhat_by_key.setdefault(r.cd_key, []).append(float(r.y_hat))
 
     offenders: list[Offender] = []
-    for k in sorted(y_by_key.keys()):  # deterministic
+    for k in sorted(y_by_key.keys()):
         y = y_by_key[k]
         y_hat = yhat_by_key.get(k, [])
         if len(y) != len(y_hat):
@@ -153,13 +147,42 @@ def _compute_top_offenders_current_window(
         if len(y) < min_points:
             continue
         m = compute_metrics(y, y_hat, rolling_eps)
-        offenders.append(
-            Offender(cd_key=k, n_points=len(y), mae=m.mae, rmse=m.rmse, mape=m.mape)
-        )
+        offenders.append(Offender(cd_key=k, n_points=len(y), mae=m.mae, rmse=m.rmse, mape=m.mape))
 
-    # deterministic ranking: worst MAE first; tiebreaker cd_key
     offenders.sort(key=lambda o: (-o.mae, o.cd_key))
     return offenders[:top_n]
+
+
+def _compute_per_key_quality(
+    *,
+    rows: list[CanonicalRow],
+    current_days: list,
+    mape_eps: float,
+    min_points_per_key: int,
+) -> list[PerKeyQuality]:
+    y_by_key: dict[str, list[float]] = {}
+    yhat_by_key: dict[str, list[float]] = {}
+
+    current_days_set = set(current_days)
+    for r in rows:
+        if r.ds not in current_days_set:
+            continue
+        y_by_key.setdefault(r.cd_key, []).append(float(r.y))
+        yhat_by_key.setdefault(r.cd_key, []).append(float(r.y_hat))
+
+    out: list[PerKeyQuality] = []
+    for k in sorted(y_by_key.keys()):
+        y = y_by_key[k]
+        y_hat = yhat_by_key.get(k, [])
+        if len(y) != len(y_hat):
+            raise ValidationError(f"Mismatch y/y_hat for cd_key={k} in current window.")
+        if len(y) < min_points_per_key:
+            continue
+        m = compute_metrics(y, y_hat, mape_eps)
+        out.append(PerKeyQuality(cd_key=k, n_points=len(y), metrics=m))
+
+    out.sort(key=lambda pk: (-pk.metrics.mae, pk.cd_key))
+    return out
 
 
 def run_monitoring(req: MonitoringRequest, *, generated_at: str | None = None) -> MonitoringResponse:
@@ -173,7 +196,7 @@ def run_monitoring(req: MonitoringRequest, *, generated_at: str | None = None) -
     drift_series = _normalize_series_names(req.drift_series)
 
     rows = _require_rows(req.canonical_rows)
-    days, y_by_day, yhat_by_day, _, y_all, yhat_all = _index_rows(rows)
+    days, y_by_day, yhat_by_day, y_all, yhat_all = _index_rows(rows)
 
     overall = compute_metrics(y_all, yhat_all, req.rolling.mape_eps)
 
@@ -233,7 +256,6 @@ def run_monitoring(req: MonitoringRequest, *, generated_at: str | None = None) -
                     )
                 )
 
-    # Quality severity based on current vs baseline relative deltas (metric-wise worst)
     quality_sev = Severity.OK
     for metric_name in ("mae", "rmse", "mape"):
         b = _metric_get(baseline_metrics, metric_name)
@@ -248,7 +270,6 @@ def run_monitoring(req: MonitoringRequest, *, generated_at: str | None = None) -
             ),
         )
 
-    # Drift for requested series (baseline vs current)
     drift: dict[str, object] = {}
     drift_sev = Severity.OK
     for s in drift_series:
@@ -276,25 +297,60 @@ def run_monitoring(req: MonitoringRequest, *, generated_at: str | None = None) -
 
     overall_sev = max_severity(quality_sev, drift_sev)
 
+    min_points_per_key = max(1, req.rolling.min_points_per_window // max(1, req.rolling.rolling_window_days))
+
     top_offenders = _compute_top_offenders_current_window(
         rows=rows,
         current_days=current_days,
         rolling_eps=req.rolling.mape_eps,
-        min_points=max(1, req.rolling.min_points_per_window // max(1, req.rolling.rolling_window_days)),
+        min_points=min_points_per_key,
         top_n=req.policy.top_offenders_n,
     )
 
+    per_key_quality = _compute_per_key_quality(
+        rows=rows,
+        current_days=current_days,
+        mape_eps=req.rolling.mape_eps,
+        min_points_per_key=min_points_per_key,
+    )
+
     gen_at = _iso_utc_generated_at(generated_at)
+
+    config_snapshot = {
+        "rolling": {
+            "rolling_window_days": req.rolling.rolling_window_days,
+            "baseline_window_days": req.rolling.baseline_window_days,
+            "min_points_per_window": req.rolling.min_points_per_window,
+            "mape_eps": req.rolling.mape_eps,
+            "degradation_abs_threshold": req.rolling.degradation_abs_threshold,
+            "degradation_rel_threshold": req.rolling.degradation_rel_threshold,
+        },
+        "drift": {"psi_bins": req.drift.psi_bins},
+        "policy": {
+            "degradation_warn_rel": req.policy.degradation_warn_rel,
+            "degradation_crit_rel": req.policy.degradation_crit_rel,
+            "drift_warn_psi": req.policy.drift_warn_psi,
+            "drift_crit_psi": req.policy.drift_crit_psi,
+            "drift_warn_ks_pvalue": req.policy.drift_warn_ks_pvalue,
+            "drift_crit_ks_pvalue": req.policy.drift_crit_ks_pvalue,
+            "top_offenders_n": req.policy.top_offenders_n,
+        },
+        "drift_series": drift_series,
+        "min_points_per_key": min_points_per_key,
+    }
 
     notes: list[str] = []
     notes.append("Baseline/current windows are defined over distinct ds values (days).")
     notes.append("Rolling series windows with insufficient points are skipped deterministically.")
     notes.append("Drift is computed with KS-test and PSI over selected series.")
-    notes.append("Top offenders are ranked by current-window MAE (worst first).")
+    notes.append("Top offenders and per_key_quality are computed on the current window only.")
+    notes.append("Per-key min points is derived from global min_points_per_window and rolling_window_days.")
 
     report = MonitoringReport(
+        schema_version=REPORT_SCHEMA_VERSION,
         run_id=req.run_id,
         generated_at=gen_at,
+        config=config_snapshot,
         overall_metrics=overall,
         baseline_metrics=baseline_metrics,
         current_metrics=current_metrics,
@@ -307,25 +363,21 @@ def run_monitoring(req: MonitoringRequest, *, generated_at: str | None = None) -
         drift_severity=drift_sev,
         overall_severity=overall_sev,
         top_offenders=top_offenders,
+        per_key_quality=per_key_quality,
         notes=notes,
     )
 
     report_dict = asdict(report)
 
-    # Minimal stable markdown (infra reporter is richer)
     md_lines: list[str] = []
     md_lines.append("# FGDM Report")
     md_lines.append("")
+    md_lines.append(f"- schema_version: `{report.schema_version}`")
     md_lines.append(f"- run_id: `{report.run_id}`")
     md_lines.append(f"- generated_at (UTC): `{report.generated_at}`")
     md_lines.append(f"- quality_severity: `{report.quality_severity.value}`")
     md_lines.append(f"- drift_severity: `{report.drift_severity.value}`")
     md_lines.append(f"- overall_severity: `{report.overall_severity.value}`")
-    md_lines.append("")
-    md_lines.append("## Overall metrics")
-    md_lines.append(f"- MAE: {report.overall_metrics.mae:.6f}")
-    md_lines.append(f"- RMSE: {report.overall_metrics.rmse:.6f}")
-    md_lines.append(f"- MAPE: {report.overall_metrics.mape:.6f}")
     md_lines.append("")
     report_markdown = "\n".join(md_lines)
 

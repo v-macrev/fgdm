@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date
-from typing import Mapping, Sequence
+from typing import Any, Mapping, Sequence
 
 from fgdm.domain.governance import Severity
 
@@ -58,12 +58,21 @@ class Offender:
 
 
 @dataclass(frozen=True)
+class PerKeyQuality:
+    cd_key: str
+    n_points: int
+    metrics: MetricResult
+
+
+@dataclass(frozen=True)
 class MonitoringReport:
+    schema_version: str
     run_id: str
     generated_at: str  # ISO-8601 UTC
 
-    overall_metrics: MetricResult
+    config: Mapping[str, Any]
 
+    overall_metrics: MetricResult
     baseline_metrics: MetricResult
     current_metrics: MetricResult
 
@@ -80,5 +89,6 @@ class MonitoringReport:
     overall_severity: Severity
 
     top_offenders: Sequence[Offender]
+    per_key_quality: Sequence[PerKeyQuality]
 
     notes: Sequence[str]

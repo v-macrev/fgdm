@@ -5,12 +5,15 @@ from typing import Any
 
 
 def render_markdown(report: dict[str, Any]) -> str:
+    schema_version = str(report.get("schema_version", ""))
     run_id = str(report.get("run_id", ""))
     generated_at = str(report.get("generated_at", ""))
 
     quality_sev = str((report.get("quality_severity") or ""))
     drift_sev = str((report.get("drift_severity") or ""))
     overall_sev = str((report.get("overall_severity") or ""))
+
+    config = report.get("config", {}) or {}
 
     overall = report.get("overall_metrics", {}) or {}
     baseline = report.get("baseline_metrics", {}) or {}
@@ -23,6 +26,7 @@ def render_markdown(report: dict[str, Any]) -> str:
     events = report.get("degradation_events", []) or []
     rolling_series = report.get("rolling_series", []) or []
     offenders = report.get("top_offenders", []) or []
+    per_key_quality = report.get("per_key_quality", []) or []
     notes = report.get("notes", []) or []
 
     def f6(x: Any) -> str:
@@ -31,11 +35,18 @@ def render_markdown(report: dict[str, Any]) -> str:
     lines: list[str] = []
     lines.append("# FGDM Report")
     lines.append("")
+    lines.append(f"- schema_version: `{schema_version}`")
     lines.append(f"- run_id: `{run_id}`")
     lines.append(f"- generated_at (UTC): `{generated_at}`")
     lines.append(f"- quality_severity: `{quality_sev}`")
     lines.append(f"- drift_severity: `{drift_sev}`")
     lines.append(f"- overall_severity: `{overall_sev}`")
+    lines.append("")
+
+    lines.append("## Config snapshot")
+    lines.append("```json")
+    lines.append(str(config))
+    lines.append("```")
     lines.append("")
 
     lines.append("## Overall metrics")
@@ -107,6 +118,21 @@ def render_markdown(report: dict[str, Any]) -> str:
             lines.append(
                 f"| {i} | {o.get('cd_key','')} | {int(o.get('n_points',0))} | "
                 f"{f6(o.get('mae',0.0))} | {f6(o.get('rmse',0.0))} | {f6(o.get('mape',0.0))} |"
+            )
+    lines.append("")
+
+    lines.append("## Per-key quality (tail)")
+    pk_tail = per_key_quality[:10]  # already sorted worst-first, show top 10
+    if not pk_tail:
+        lines.append("_No per-key quality entries (likely insufficient per-key points)._")
+    else:
+        lines.append("| rank | cd_key | n_points | MAE | RMSE | MAPE |")
+        lines.append("|---:|---|---:|---:|---:|---:|")
+        for i, pk in enumerate(pk_tail, start=1):
+            m = pk.get("metrics", {}) or {}
+            lines.append(
+                f"| {i} | {pk.get('cd_key','')} | {int(pk.get('n_points',0))} | "
+                f"{f6(m.get('mae',0.0))} | {f6(m.get('rmse',0.0))} | {f6(m.get('mape',0.0))} |"
             )
     lines.append("")
 

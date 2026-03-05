@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from datetime import date
+from enum import Enum
 from pathlib import Path
 from typing import Any
 
@@ -9,6 +10,9 @@ from typing import Any
 def _normalize(obj: Any) -> Any:
     if isinstance(obj, date):
         return obj.isoformat()
+
+    if isinstance(obj, Enum):
+        return obj.value
 
     if isinstance(obj, dict):
         return {k: _normalize(v) for k, v in obj.items()}
