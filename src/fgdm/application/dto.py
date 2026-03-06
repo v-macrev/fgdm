@@ -7,6 +7,7 @@ from fgdm.domain.drift import DriftConfig
 from fgdm.domain.governance import PolicyConfig
 from fgdm.domain.models import CanonicalRow
 from fgdm.domain.rolling import RollingConfig
+from fgdm.domain.validation import ValidationConfig
 
 
 @dataclass(frozen=True)
@@ -16,6 +17,7 @@ class MonitoringRequest:
     rolling: RollingConfig
     drift: DriftConfig
     policy: PolicyConfig
+    validation: ValidationConfig
     drift_series: Sequence[str]  # e.g. ["residual"] or ["residual","y","y_hat"]
 
 

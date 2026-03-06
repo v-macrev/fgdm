@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any
 
@@ -14,6 +15,8 @@ def render_markdown(report: dict[str, Any]) -> str:
     overall_sev = str((report.get("overall_severity") or ""))
 
     config = report.get("config", {}) or {}
+    validation_summary = report.get("validation_summary", {}) or {}
+    rule_breaches = report.get("rule_breaches", []) or []
 
     overall = report.get("overall_metrics", {}) or {}
     baseline = report.get("baseline_metrics", {}) or {}
@@ -45,8 +48,28 @@ def render_markdown(report: dict[str, Any]) -> str:
 
     lines.append("## Config snapshot")
     lines.append("```json")
-    lines.append(str(config))
+    lines.append(json.dumps(config, ensure_ascii=False, indent=2, sort_keys=True))
     lines.append("```")
+    lines.append("")
+
+    lines.append("## Validation summary")
+    lines.append(f"- row_count: {int(validation_summary.get('row_count', 0))}")
+    lines.append(f"- unique_keys: {int(validation_summary.get('unique_keys', 0))}")
+    lines.append(f"- unique_days: {int(validation_summary.get('unique_days', 0))}")
+    lines.append(f"- duplicate_key_ds_rows: {int(validation_summary.get('duplicate_key_ds_rows', 0))}")
+    lines.append(f"- duplicate_key_ds_ratio: {f6(validation_summary.get('duplicate_key_ds_ratio', 0.0))}")
+    lines.append(f"- zero_actual_rows: {int(validation_summary.get('zero_actual_rows', 0))}")
+    lines.append(f"- zero_actual_ratio: {f6(validation_summary.get('zero_actual_ratio', 0.0))}")
+    lines.append(f"- negative_actual_rows: {int(validation_summary.get('negative_actual_rows', 0))}")
+    lines.append(f"- negative_prediction_rows: {int(validation_summary.get('negative_prediction_rows', 0))}")
+    lines.append("")
+
+    lines.append("## Rule breaches")
+    if not rule_breaches:
+        lines.append("_No validation rule breaches detected._")
+    else:
+        for item in rule_breaches:
+            lines.append(f"- {item}")
     lines.append("")
 
     lines.append("## Overall metrics")
@@ -121,8 +144,8 @@ def render_markdown(report: dict[str, Any]) -> str:
             )
     lines.append("")
 
-    lines.append("## Per-key quality (tail)")
-    pk_tail = per_key_quality[:10]  # already sorted worst-first, show top 10
+    lines.append("## Per-key quality (top 10)")
+    pk_tail = per_key_quality[:10]
     if not pk_tail:
         lines.append("_No per-key quality entries (likely insufficient per-key points)._")
     else:

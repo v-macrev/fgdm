@@ -27,9 +27,13 @@ from fgdm.domain.rolling import (
     compute_metrics,
     split_baseline_current_days,
 )
+from fgdm.domain.validation import (
+    evaluate_validation_breaches,
+    summarize_rows,
+)
 
 
-REPORT_SCHEMA_VERSION = "1.0"
+REPORT_SCHEMA_VERSION = "1.1"
 
 
 def _iso_utc_generated_at(explicit: str | None) -> str:
@@ -67,10 +71,8 @@ def _index_rows(rows: list[CanonicalRow]) -> tuple[list, dict, dict, list[float]
 
     for r in rows:
         days.append(r.ds)
-
         y_by_day.setdefault(r.ds, []).append(float(r.y))
         yhat_by_day.setdefault(r.ds, []).append(float(r.y_hat))
-
         y_all.append(float(r.y))
         yhat_all.append(float(r.y_hat))
 
@@ -192,10 +194,14 @@ def run_monitoring(req: MonitoringRequest, *, generated_at: str | None = None) -
     req.rolling.validate()
     req.drift.validate()
     req.policy.validate()
+    req.validation.validate()
 
     drift_series = _normalize_series_names(req.drift_series)
 
     rows = _require_rows(req.canonical_rows)
+    validation_summary = summarize_rows(rows)
+    rule_breaches = evaluate_validation_breaches(validation_summary, req.validation)
+
     days, y_by_day, yhat_by_day, y_all, yhat_all = _index_rows(rows)
 
     overall = compute_metrics(y_all, yhat_all, req.rolling.mape_eps)
@@ -295,6 +301,9 @@ def run_monitoring(req: MonitoringRequest, *, generated_at: str | None = None) -
             ),
         )
 
+    if rule_breaches:
+        quality_sev = max_severity(quality_sev, Severity.WARN)
+
     overall_sev = max_severity(quality_sev, drift_sev)
 
     min_points_per_key = max(1, req.rolling.min_points_per_window // max(1, req.rolling.rolling_window_days))
@@ -335,6 +344,14 @@ def run_monitoring(req: MonitoringRequest, *, generated_at: str | None = None) -
             "drift_crit_ks_pvalue": req.policy.drift_crit_ks_pvalue,
             "top_offenders_n": req.policy.top_offenders_n,
         },
+        "validation": {
+            "allow_negative_actuals": req.validation.allow_negative_actuals,
+            "allow_negative_predictions": req.validation.allow_negative_predictions,
+            "max_zero_actual_ratio": req.validation.max_zero_actual_ratio,
+            "max_duplicate_key_ds_ratio": req.validation.max_duplicate_key_ds_ratio,
+            "min_unique_keys": req.validation.min_unique_keys,
+            "min_unique_days": req.validation.min_unique_days,
+        },
         "drift_series": drift_series,
         "min_points_per_key": min_points_per_key,
     }
@@ -345,12 +362,16 @@ def run_monitoring(req: MonitoringRequest, *, generated_at: str | None = None) -
     notes.append("Drift is computed with KS-test and PSI over selected series.")
     notes.append("Top offenders and per_key_quality are computed on the current window only.")
     notes.append("Per-key min points is derived from global min_points_per_window and rolling_window_days.")
+    if rule_breaches:
+        notes.append("Validation rule breaches raise quality severity to at least WARN.")
 
     report = MonitoringReport(
         schema_version=REPORT_SCHEMA_VERSION,
         run_id=req.run_id,
         generated_at=gen_at,
         config=config_snapshot,
+        validation_summary=validation_summary,
+        rule_breaches=rule_breaches,
         overall_metrics=overall,
         baseline_metrics=baseline_metrics,
         current_metrics=current_metrics,

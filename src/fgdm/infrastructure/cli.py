@@ -10,9 +10,17 @@ from fgdm.domain.drift import DriftConfig
 from fgdm.domain.errors import FGDMError
 from fgdm.domain.governance import PolicyConfig
 from fgdm.domain.rolling import RollingConfig
+from fgdm.domain.validation import ValidationConfig
 from fgdm.infrastructure.io import CanonicalCSVConfig, load_canonical_csv
 from fgdm.infrastructure.reporting.json_reporter import write_json
 from fgdm.infrastructure.reporting.markdown_reporter import write_markdown
+
+
+SEVERITY_ORDER = {
+    "ok": 0,
+    "warn": 1,
+    "crit": 2,
+}
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -30,6 +38,13 @@ def _build_parser() -> argparse.ArgumentParser:
         type=str,
         default=None,
         help="Override generated_at (ISO-8601). If omitted, uses SOURCE_DATE_EPOCH or current UTC.",
+    )
+    p.add_argument(
+        "--fail-on-severity",
+        type=str,
+        default="none",
+        choices=["none", "warn", "crit"],
+        help="Return non-zero exit code when overall_severity reaches this threshold.",
     )
 
     # CSV config
@@ -58,19 +73,30 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Comma-separated: residual,y,y_hat",
     )
 
-    # Policy config (severity)
+    # Policy config
     p.add_argument("--quality-warn-rel", type=float, default=0.2)
     p.add_argument("--quality-crit-rel", type=float, default=0.5)
-
     p.add_argument("--drift-warn-psi", type=float, default=0.2)
     p.add_argument("--drift-crit-psi", type=float, default=0.5)
-
     p.add_argument("--drift-warn-ks-p", type=float, default=0.05)
     p.add_argument("--drift-crit-ks-p", type=float, default=0.01)
-
     p.add_argument("--top-offenders-n", type=int, default=10)
 
+    # Validation config
+    p.add_argument("--allow-negative-actuals", action="store_true")
+    p.add_argument("--allow-negative-predictions", action="store_true")
+    p.add_argument("--max-zero-actual-ratio", type=float, default=0.2)
+    p.add_argument("--max-duplicate-key-ds-ratio", type=float, default=0.05)
+    p.add_argument("--min-unique-keys", type=int, default=1)
+    p.add_argument("--min-unique-days", type=int, default=1)
+
     return p
+
+
+def _should_fail(overall_severity: str, fail_on: str) -> bool:
+    if fail_on == "none":
+        return False
+    return SEVERITY_ORDER[overall_severity] >= SEVERITY_ORDER[fail_on]
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -120,6 +146,15 @@ def main(argv: list[str] | None = None) -> int:
             top_offenders_n=args.top_offenders_n,
         )
 
+        validation = ValidationConfig(
+            allow_negative_actuals=bool(args.allow_negative_actuals),
+            allow_negative_predictions=bool(args.allow_negative_predictions),
+            max_zero_actual_ratio=args.max_zero_actual_ratio,
+            max_duplicate_key_ds_ratio=args.max_duplicate_key_ds_ratio,
+            min_unique_keys=args.min_unique_keys,
+            min_unique_days=args.min_unique_days,
+        )
+
         drift_series = [s.strip() for s in (args.drift_series or "").split(",") if s.strip()]
 
         req = MonitoringRequest(
@@ -128,6 +163,7 @@ def main(argv: list[str] | None = None) -> int:
             rolling=rolling,
             drift=drift,
             policy=policy,
+            validation=validation,
             drift_series=drift_series,
         )
 
@@ -139,8 +175,22 @@ def main(argv: list[str] | None = None) -> int:
         write_json(res.report_dict, json_path)
         write_markdown(res.report_dict, md_path)
 
+        overall_severity = str(res.report_dict["overall_severity"])
+        rule_breaches = res.report_dict.get("rule_breaches", []) or []
+
         print(f"Wrote JSON: {json_path}")
         print(f"Wrote Markdown: {md_path}")
+        print(f"Overall severity: {overall_severity}")
+        print(f"Rule breaches: {len(rule_breaches)}")
+
+        if _should_fail(overall_severity, args.fail_on_severity):
+            print(
+                f"FGDM gate failed: overall_severity={overall_severity}, "
+                f"threshold={args.fail_on_severity}",
+                file=sys.stderr,
+            )
+            return 4
+
         return 0
 
     except FGDMError as e:

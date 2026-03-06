@@ -5,6 +5,7 @@ from datetime import date
 from typing import Any, Mapping, Sequence
 
 from fgdm.domain.governance import Severity
+from fgdm.domain.validation import ValidationSummary
 
 
 @dataclass(frozen=True)
@@ -72,6 +73,9 @@ class MonitoringReport:
 
     config: Mapping[str, Any]
 
+    validation_summary: ValidationSummary
+    rule_breaches: Sequence[str]
+
     overall_metrics: MetricResult
     baseline_metrics: MetricResult
     current_metrics: MetricResult
@@ -82,7 +86,7 @@ class MonitoringReport:
 
     degradation_events: Sequence[DegradationEvent]
 
-    drift: Mapping[str, DriftResult]  # e.g., residual, y, y_hat
+    drift: Mapping[str, DriftResult]
 
     quality_severity: Severity
     drift_severity: Severity
