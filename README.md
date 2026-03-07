@@ -1,327 +1,165 @@
 # Forecast Governance & Drift Monitoring (FGDM)
 
-Lightweight micro-framework for monitoring forecast quality and detecting statistical drift in production environments.
+Lightweight, production-oriented micro-framework for forecast quality monitoring and statistical drift detection.
 
-FGDM analyzes canonical forecast outputs and produces deterministic monitoring reports with statistical diagnostics, rolling degradation detection, and governance signals.
+FGDM evaluates canonical forecast outputs and produces deterministic governance reports for validation, auditing, and CI/CD gating.
 
-The project follows clean architecture principles and emphasizes reproducibility, explicit types, and engineering transparency.
+## Why this project exists
 
----
+Forecasting systems rarely fail in dramatic ways. They degrade quietly, drift statistically, and then ruin decisions with the calm confidence of a broken compass.
 
-# Core Capabilities
+FGDM exists to monitor that behaviour explicitly.
 
-FGDM evaluates forecasting outputs using a canonical long-format dataset:
+It provides:
 
-```
+- forecast error metrics
+- rolling degradation detection
+- statistical drift diagnostics
+- dataset validation rules
+- governance severity signals
+- deterministic JSON and Markdown reporting
+- CI-friendly exit codes
+
+## Canonical input schema
+
+FGDM expects long-format forecast outputs with the following columns:
+
+```text
 cd_key | ds | y | y_hat
-```
+````
 
 Where:
 
-* **cd_key** → entity identifier (SKU, store, product, etc.)
-* **ds** → observation date
-* **y** → actual value
-* **y_hat** → predicted value
+* `cd_key` = entity identifier
+* `ds` = date
+* `y` = actual value
+* `y_hat` = predicted value
 
-The framework provides:
+Supported formats:
 
-* Forecast error metrics
-* Rolling performance degradation detection
-* Statistical drift detection
-* Dataset validation checks
-* Per-key quality diagnostics
-* Deterministic monitoring reports
+* `.csv`
+* `.parquet`
 
----
+## Core capabilities
 
-# Metrics
+### Metrics
 
-FGDM computes the following metrics:
+* MAE
+* RMSE
+* MAPE
 
-* **MAE** — Mean Absolute Error
-* **RMSE** — Root Mean Squared Error
-* **MAPE** — Mean Absolute Percentage Error
+### Drift detection
 
-Metrics are computed for:
+* KS test
+* PSI
 
-* the entire dataset
-* baseline vs current windows
-* per-key diagnostics
+### Performance monitoring
 
----
+* rolling window degradation
+* baseline vs current comparison
+* top offenders by `cd_key`
+* per-key quality breakdown
 
-# Drift Detection
+### Governance
 
-FGDM detects distribution changes between baseline and current windows using:
+* validation summary
+* rule breaches
+* quality / drift / overall severity
+* fail-on-severity CLI gating
 
-### Kolmogorov-Smirnov Test (KS)
+## Architecture
 
-Measures whether two samples come from the same distribution.
+FGDM follows a lightweight Clean Architecture approach.
 
-Outputs:
+* `domain` → pure computations and typed models
+* `application` → orchestration and use-cases
+* `infrastructure` → CLI, loaders, reporters
 
-* KS statistic
-* p-value
+See [docs/architecture.md](docs/architecture.md).
 
-### Population Stability Index (PSI)
-
-Measures distribution shift using histogram binning.
-
-Typical interpretation:
-
-| PSI        | Interpretation    |
-| ---------- | ----------------- |
-| < 0.1      | stable            |
-| 0.1 – 0.25 | moderate drift    |
-| > 0.25     | significant drift |
-
----
-
-# Rolling Degradation Detection
-
-The framework compares two time windows:
-
-```
-Baseline Window (historical)
-Current Window (recent)
-```
-
-Metrics are evaluated across rolling windows to detect:
-
-* sudden performance degradation
-* gradual error accumulation
-* metric instability
-
----
-
-# Validation Layer
-
-FGDM validates incoming datasets before analysis.
-
-Checks include:
-
-* duplicate `(cd_key, ds)`
-* zero-value ratios
-* negative actual values
-* negative predictions
-* minimum unique keys
-* minimum unique days
-
-Validation breaches are recorded in the monitoring report.
-
----
-
-# Input Formats
-
-FGDM supports:
-
-```
-.csv
-.parquet
-```
-
-Input format is detected automatically based on file extension.
-
----
-
-# Installation
-
-Install the project in editable mode:
+## Installation
 
 ```bash
 pip install -e .
 ```
 
-For development tools:
+For development:
 
 ```bash
 pip install -e ".[dev]"
 ```
 
----
+## Quick demo
 
-# Running FGDM
-
-### CSV Input
+Generate demo data:
 
 ```bash
-fgdm \
-  --input ./data/canonical.csv \
-  --output-dir ./fgdm_out \
-  --run-id exp_csv
+fgdm-demo-data --output-dir demo_data
 ```
 
-### Parquet Input
+Run monitoring:
 
 ```bash
-fgdm \
-  --input ./data/canonical.parquet \
-  --output-dir ./fgdm_out \
-  --run-id exp_parquet
+fgdm --input demo_data/forecast_demo.csv --output-dir demo_output --run-id demo_csv
 ```
 
----
+For a full walkthrough, see [docs/demo.md](docs/demo.md).
 
-# Deterministic Runs
+## Deterministic execution
 
-FGDM supports reproducible outputs.
+FGDM supports reproducible timestamps via:
 
-You can fix the report timestamp:
-
-```bash
-fgdm \
-  --input ./data/canonical.csv \
-  --generated-at 2026-03-03T00:00:00+00:00
-```
-
-Alternatively:
-
-```
-SOURCE_DATE_EPOCH
-```
-
-can be used in CI environments.
-
----
-
-# Pipeline Gating
-
-FGDM can fail CI/CD pipelines based on severity.
+* `--generated-at`
+* `SOURCE_DATE_EPOCH`
 
 Example:
 
 ```bash
-fgdm \
-  --input ./data/canonical.csv \
-  --fail-on-severity warn
+fgdm --input demo_data/forecast_demo.csv --output-dir demo_output --run-id deterministic_demo --generated-at 2026-03-03T00:00:00+00:00
 ```
 
-Severity levels:
+## CI / pipeline gating
 
-```
-ok
-warn
-crit
+Fail the process when severity reaches a threshold:
+
+```bash
+fgdm --input demo_data/forecast_demo.csv --output-dir demo_output --run-id gated_demo --fail-on-severity warn
 ```
 
 Exit codes:
 
-| Code | Meaning                   |
-| ---- | ------------------------- |
-| 0    | success                   |
-| 2    | FGDM domain error         |
-| 3    | unexpected runtime error  |
-| 4    | governance gate triggered |
+* `0` → success
+* `2` → FGDM domain error
+* `3` → unexpected runtime error
+* `4` → governance gate triggered
 
----
+## Example outputs
 
-# Outputs
+FGDM generates:
 
-FGDM produces two report formats:
+* JSON report for automation
+* Markdown report for humans
 
-### JSON
+Reports include:
 
-Machine-readable monitoring report.
+* overall metrics
+* baseline vs current metrics
+* rolling performance windows
+* drift results
+* degradation events
+* top offenders
+* per-key quality
+* validation summary
+* rule breaches
 
-Used for:
-
-* CI validation
-* dashboards
-* automated pipelines
-
-### Markdown
-
-Human-readable analysis report.
-
-Useful for:
-
-* debugging
-* experiment tracking
-* audit trails
-
----
-
-# Example Output Structure
-
-```
-FGDM Report
-
-Overall metrics
-Baseline vs Current comparison
-Rolling performance series
-Drift statistics
-Degradation events
-Top forecast offenders
-Per-key diagnostics
-Validation results
-```
-
----
-
-# Project Architecture
-
-FGDM follows **Clean Architecture** principles.
-
-```
-src/fgdm
-│
-├── domain
-│   ├── metrics
-│   ├── drift
-│   ├── rolling
-│   ├── validation
-│   └── governance
-│
-├── application
-│   ├── dto
-│   └── monitoring_service
-│
-└── infrastructure
-    ├── cli
-    ├── io
-    └── reporting
-```
-
-Design goals:
-
-* deterministic outputs
-* explicit domain boundaries
-* minimal dependencies
-* testable components
-* reproducible experiments
-
----
-
-# Running Tests
+## Testing
 
 ```bash
 pytest
 ```
 
----
+## License
 
-# License
+GNU Affero General Public License v3.0
 
-This project is licensed under the:
-
-**GNU Affero General Public License v3.0**
-
-```
-GNU Affero General Public License
-Version 3, 19 November 2007
-```
-
-See the `LICENSE` file for full terms.
-
----
-
-# Project Status
-
-FGDM is a lightweight monitoring framework designed for:
-
-* forecasting pipelines
-* MLOps governance
-* drift detection
-* model performance auditing
-
-The project is intentionally minimal while remaining production-oriented.
+See the `LICENSE` file.

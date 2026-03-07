@@ -1,0 +1,15 @@
+flowchart TD
+    A[CLI / Demo CLI] --> B[Infrastructure Loaders]
+    B --> C[Application Service]
+    C --> D[Domain Validation]
+    C --> E[Domain Metrics]
+    C --> F[Domain Rolling]
+    C --> G[Domain Drift]
+    C --> H[Domain Governance]
+    D --> I[Monitoring Report]
+    E --> I
+    F --> I
+    G --> I
+    H --> I
+    I --> J[JSON Reporter]
+    I --> K[Markdown Reporter]
