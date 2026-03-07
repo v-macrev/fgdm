@@ -176,11 +176,12 @@ def load_canonical_parquet(
 
 
 def load_canonical_data(
-    path: Path,
+    path: str | Path,
     *,
     csv_cfg: CanonicalCSVConfig | None = None,
     parquet_cfg: CanonicalParquetConfig | None = None,
 ) -> list[CanonicalRow]:
+    path = Path(path)
     fmt = detect_input_format(path)
     if fmt == "csv":
         return load_canonical_csv(path, csv_cfg)
