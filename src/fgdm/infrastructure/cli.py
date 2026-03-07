@@ -12,7 +12,12 @@ from fgdm.domain.errors import FGDMError
 from fgdm.domain.governance import PolicyConfig
 from fgdm.domain.rolling import RollingConfig
 from fgdm.domain.validation import ValidationConfig
-from fgdm.infrastructure.io import CanonicalCSVConfig, load_canonical_csv
+from fgdm.infrastructure.io import (
+    CanonicalCSVConfig,
+    CanonicalParquetConfig,
+    detect_input_format,
+    load_canonical_data,
+)
 from fgdm.infrastructure.reporting.json_reporter import write_json
 from fgdm.infrastructure.reporting.markdown_reporter import write_markdown
 
@@ -31,7 +36,7 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument("--version", action="store_true", help="Print version and exit.")
 
-    p.add_argument("--input", type=str, required=False, help="Path to canonical CSV input.")
+    p.add_argument("--input", type=str, required=False, help="Path to canonical input (.csv or .parquet).")
     p.add_argument("--output-dir", type=str, default="fgdm_out", help="Directory for report outputs.")
     p.add_argument("--run-id", type=str, default="run", help="Run identifier (stable, user-defined).")
     p.add_argument(
@@ -48,11 +53,13 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Return non-zero exit code when overall_severity reaches this threshold.",
     )
 
-    # CSV config
+    # Shared column config
     p.add_argument("--cd-key-col", type=str, default="cd_key")
     p.add_argument("--ds-col", type=str, default="ds")
     p.add_argument("--y-col", type=str, default="y")
     p.add_argument("--y-hat-col", type=str, default="y_hat")
+
+    # CSV-only config
     p.add_argument("--delimiter", type=str, default=",")
     p.add_argument("--encoding", type=str, default="utf-8")
 
@@ -133,6 +140,8 @@ def main(argv: list[str] | None = None) -> int:
         input_path = Path(args.input).expanduser().resolve()
         output_dir = Path(args.output_dir).expanduser().resolve()
 
+        input_format = detect_input_format(input_path)
+
         csv_cfg = CanonicalCSVConfig(
             cd_key_col=args.cd_key_col,
             ds_col=args.ds_col,
@@ -141,7 +150,18 @@ def main(argv: list[str] | None = None) -> int:
             delimiter=args.delimiter,
             encoding=args.encoding,
         )
-        rows = load_canonical_csv(input_path, csv_cfg)
+        parquet_cfg = CanonicalParquetConfig(
+            cd_key_col=args.cd_key_col,
+            ds_col=args.ds_col,
+            y_col=args.y_col,
+            y_hat_col=args.y_hat_col,
+        )
+
+        rows = load_canonical_data(
+            input_path,
+            csv_cfg=csv_cfg,
+            parquet_cfg=parquet_cfg,
+        )
 
         rolling = RollingConfig(
             rolling_window_days=args.rolling_window_days,
@@ -195,6 +215,7 @@ def main(argv: list[str] | None = None) -> int:
         overall_severity = _severity_to_str(res.report_dict["overall_severity"])
         rule_breaches = res.report_dict.get("rule_breaches", []) or []
 
+        print(f"Input format: {input_format}")
         print(f"Wrote JSON: {json_path}")
         print(f"Wrote Markdown: {md_path}")
         print(f"Overall severity: {overall_severity}")
