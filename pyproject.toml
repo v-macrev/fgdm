@@ -49,6 +49,7 @@ dev = [
 
 [project.scripts]
 fgdm = "fgdm.infrastructure.cli:main"
+fgdm-demo-data = "fgdm.infrastructure.generate_demo:main"
 
 [tool.setuptools]
 package-dir = { "" = "src" }
