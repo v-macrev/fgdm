@@ -68,12 +68,26 @@ def render_markdown(report: dict[str, Any]) -> str:
     lines.append(f"- row_count: {int(validation_summary.get('row_count', 0))}")
     lines.append(f"- unique_keys: {int(validation_summary.get('unique_keys', 0))}")
     lines.append(f"- unique_days: {int(validation_summary.get('unique_days', 0))}")
-    lines.append(f"- duplicate_key_ds_rows: {int(validation_summary.get('duplicate_key_ds_rows', 0))}")
-    lines.append(f"- duplicate_key_ds_ratio: {f6(validation_summary.get('duplicate_key_ds_ratio', 0.0))}")
+    lines.append(
+        "- duplicate_key_ds_rows: "
+        f"{int(validation_summary.get('duplicate_key_ds_rows', 0))}"
+    )
+    lines.append(
+        "- duplicate_key_ds_ratio: "
+        f"{f6(validation_summary.get('duplicate_key_ds_ratio', 0.0))}"
+    )
     lines.append(f"- zero_actual_rows: {int(validation_summary.get('zero_actual_rows', 0))}")
-    lines.append(f"- zero_actual_ratio: {f6(validation_summary.get('zero_actual_ratio', 0.0))}")
-    lines.append(f"- negative_actual_rows: {int(validation_summary.get('negative_actual_rows', 0))}")
-    lines.append(f"- negative_prediction_rows: {int(validation_summary.get('negative_prediction_rows', 0))}")
+    lines.append(
+        f"- zero_actual_ratio: {f6(validation_summary.get('zero_actual_ratio', 0.0))}"
+    )
+    lines.append(
+        "- negative_actual_rows: "
+        f"{int(validation_summary.get('negative_actual_rows', 0))}"
+    )
+    lines.append(
+        "- negative_prediction_rows: "
+        f"{int(validation_summary.get('negative_prediction_rows', 0))}"
+    )
     lines.append("")
 
     lines.append("## Rule breaches")
@@ -111,7 +125,9 @@ def render_markdown(report: dict[str, Any]) -> str:
         for name in sorted(drift.keys()):
             d = drift.get(name, {}) or {}
             lines.append(
-                f"| {name} | {f6(d.get('ks_stat', 0.0))} | {float(d.get('ks_pvalue', 0.0)):.6g} | {f6(d.get('psi', 0.0))} |"
+                f"| {name} | {f6(d.get('ks_stat', 0.0))} | "
+                f"{float(d.get('ks_pvalue', 0.0)):.6g} | "
+                f"{f6(d.get('psi', 0.0))} |"
             )
     lines.append("")
 
@@ -125,7 +141,8 @@ def render_markdown(report: dict[str, Any]) -> str:
         for pt in tail:
             lines.append(
                 f"| {pt.get('window_end','')} | {int(pt.get('n_points',0))} | "
-                f"{f6(pt.get('mae',0.0))} | {f6(pt.get('rmse',0.0))} | {f6(pt.get('mape',0.0))} |"
+                f"{f6(pt.get('mae',0.0))} | {f6(pt.get('rmse',0.0))} | "
+                f"{f6(pt.get('mape',0.0))} |"
             )
     lines.append("")
 
@@ -152,7 +169,8 @@ def render_markdown(report: dict[str, Any]) -> str:
         for i, o in enumerate(offenders, start=1):
             lines.append(
                 f"| {i} | {o.get('cd_key','')} | {int(o.get('n_points',0))} | "
-                f"{f6(o.get('mae',0.0))} | {f6(o.get('rmse',0.0))} | {f6(o.get('mape',0.0))} |"
+                f"{f6(o.get('mae',0.0))} | {f6(o.get('rmse',0.0))} | "
+                f"{f6(o.get('mape',0.0))} |"
             )
     lines.append("")
 
@@ -167,7 +185,8 @@ def render_markdown(report: dict[str, Any]) -> str:
             m = pk.get("metrics", {}) or {}
             lines.append(
                 f"| {i} | {pk.get('cd_key','')} | {int(pk.get('n_points',0))} | "
-                f"{f6(m.get('mae',0.0))} | {f6(m.get('rmse',0.0))} | {f6(m.get('mape',0.0))} |"
+                f"{f6(m.get('mae',0.0))} | {f6(m.get('rmse',0.0))} | "
+                f"{f6(m.get('mape',0.0))} |"
             )
     lines.append("")
 

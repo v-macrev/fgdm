@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Sequence
 
 from fgdm.domain.drift import DriftConfig
 from fgdm.domain.governance import PolicyConfig
@@ -18,7 +18,7 @@ class MonitoringRequest:
     drift: DriftConfig
     policy: PolicyConfig
     validation: ValidationConfig
-    drift_series: Sequence[str]  # e.g. ["residual"] or ["residual","y","y_hat"]
+    drift_series: Sequence[str]
 
 
 @dataclass(frozen=True)

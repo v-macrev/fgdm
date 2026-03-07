@@ -13,6 +13,7 @@ from fgdm.domain.models import CanonicalRow
 
 @dataclass(frozen=True)
 class CanonicalCSVConfig:
+
     cd_key_col: str = "cd_key"
     ds_col: str = "ds"
     y_col: str = "y"
@@ -31,6 +32,7 @@ class CanonicalCSVConfig:
 
 @dataclass(frozen=True)
 class CanonicalParquetConfig:
+
     cd_key_col: str = "cd_key"
     ds_col: str = "ds"
     y_col: str = "y"
@@ -96,7 +98,10 @@ def detect_input_format(path: Path) -> str:
     )
 
 
-def load_canonical_csv(path: Path, cfg: CanonicalCSVConfig | None = None) -> list[CanonicalRow]:
+def load_canonical_csv(
+    path: Path,
+    cfg: CanonicalCSVConfig | None = None,
+) -> list[CanonicalRow]:
     cfg = cfg or CanonicalCSVConfig()
     cfg.validate()
     _validate_input_file(path)
@@ -131,7 +136,10 @@ def load_canonical_csv(path: Path, cfg: CanonicalCSVConfig | None = None) -> lis
     return rows
 
 
-def load_canonical_parquet(path: Path, cfg: CanonicalParquetConfig | None = None) -> list[CanonicalRow]:
+def load_canonical_parquet(
+    path: Path,
+    cfg: CanonicalParquetConfig | None = None,
+) -> list[CanonicalRow]:
     cfg = cfg or CanonicalParquetConfig()
     cfg.validate()
     _validate_input_file(path)

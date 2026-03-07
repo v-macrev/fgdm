@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date
-from typing import Any, Mapping, Sequence
+from typing import Any
 
 from fgdm.domain.governance import Severity
 from fgdm.domain.validation_models import ValidationSummary
@@ -69,7 +70,7 @@ class PerKeyQuality:
 class MonitoringReport:
     schema_version: str
     run_id: str
-    generated_at: str  # ISO-8601 UTC
+    generated_at: str
 
     config: Mapping[str, Any]
 

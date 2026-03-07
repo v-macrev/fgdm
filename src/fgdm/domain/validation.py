@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Sequence
+from typing import TYPE_CHECKING
 
 from fgdm.domain.errors import ValidationError
 from fgdm.domain.validation_models import ValidationSummary
@@ -12,7 +13,7 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True)
 class ValidationConfig:
-
+    
     allow_negative_actuals: bool = False
     allow_negative_predictions: bool = True
     max_zero_actual_ratio: float = 0.2
@@ -95,12 +96,15 @@ def evaluate_validation_breaches(
     if summary.duplicate_key_ds_ratio > cfg.max_duplicate_key_ds_ratio:
         breaches.append(
             "duplicate_key_ds_ratio_above_max: "
-            f"got={summary.duplicate_key_ds_ratio:.6f}, max={cfg.max_duplicate_key_ds_ratio:.6f}"
+            f"got={summary.duplicate_key_ds_ratio:.6f}, "
+            f"max={cfg.max_duplicate_key_ds_ratio:.6f}"
         )
 
     if summary.zero_actual_ratio > cfg.max_zero_actual_ratio:
         breaches.append(
-            f"zero_actual_ratio_above_max: got={summary.zero_actual_ratio:.6f}, max={cfg.max_zero_actual_ratio:.6f}"
+            "zero_actual_ratio_above_max: "
+            f"got={summary.zero_actual_ratio:.6f}, "
+            f"max={cfg.max_zero_actual_ratio:.6f}"
         )
 
     if (not cfg.allow_negative_actuals) and summary.negative_actual_rows > 0:

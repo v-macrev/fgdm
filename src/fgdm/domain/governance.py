@@ -36,10 +36,14 @@ class PolicyConfig:
         if self.drift_warn_psi > self.drift_crit_psi:
             raise ValidationError("drift_warn_psi must be <= drift_crit_psi.")
 
-        if not (0 < self.drift_warn_ks_pvalue <= 1.0) or not (0 < self.drift_crit_ks_pvalue <= 1.0):
+        if not (0 < self.drift_warn_ks_pvalue <= 1.0) or not (
+            0 < self.drift_crit_ks_pvalue <= 1.0
+        ):
             raise ValidationError("KS p-value thresholds must be in (0,1].")
         if self.drift_warn_ks_pvalue < self.drift_crit_ks_pvalue:
-            raise ValidationError("drift_warn_ks_pvalue must be >= drift_crit_ks_pvalue.")
+            raise ValidationError(
+                "drift_warn_ks_pvalue must be >= drift_crit_ks_pvalue."
+            )
 
         if self.top_offenders_n < 1:
             raise ValidationError("top_offenders_n must be >= 1.")
@@ -53,7 +57,12 @@ def max_severity(a: Severity, b: Severity) -> Severity:
     return Severity.OK
 
 
-def severity_from_degradation_rel(rel_delta: float, *, warn_rel: float, crit_rel: float) -> Severity:
+def severity_from_degradation_rel(
+    rel_delta: float,
+    *,
+    warn_rel: float,
+    crit_rel: float,
+) -> Severity:
     if rel_delta >= crit_rel:
         return Severity.CRIT
     if rel_delta >= warn_rel:
@@ -61,8 +70,15 @@ def severity_from_degradation_rel(rel_delta: float, *, warn_rel: float, crit_rel
     return Severity.OK
 
 
-def severity_from_drift(*, psi_value: float, ks_pvalue: float, warn_psi: float, crit_psi: float,
-                        warn_p: float, crit_p: float) -> Severity:
+def severity_from_drift(
+    *,
+    psi_value: float,
+    ks_pvalue: float,
+    warn_psi: float,
+    crit_psi: float,
+    warn_p: float,
+    crit_p: float,
+) -> Severity:
     psi_sev = Severity.OK
     if psi_value >= crit_psi:
         psi_sev = Severity.CRIT

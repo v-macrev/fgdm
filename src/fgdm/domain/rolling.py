@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from datetime import date
-from typing import Iterable, Sequence
 
 from fgdm.domain.errors import ValidationError
 from fgdm.domain.metrics import mae, mape, rmse
@@ -17,7 +17,7 @@ class RollingConfig:
     mape_eps: float = 1e-9
 
     degradation_abs_threshold: float = 0.0
-    degradation_rel_threshold: float = 0.2  # 20% worse than baseline
+    degradation_rel_threshold: float = 0.2
 
     def validate(self) -> None:
         if self.rolling_window_days < 1:
@@ -71,7 +71,6 @@ def build_rolling_series(
             y_hat.extend(yhat_by_day.get(d, []))
 
         if len(y) < cfg.min_points_per_window:
-            # Deterministic: we skip windows without enough support rather than invent values.
             continue
 
         m = compute_metrics(y, y_hat, cfg.mape_eps)

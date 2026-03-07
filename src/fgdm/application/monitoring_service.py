@@ -1,9 +1,9 @@
 from __future__ import annotations
 
+import os
+from collections.abc import Iterable
 from dataclasses import asdict
 from datetime import datetime, timezone
-import os
-from typing import Iterable
 
 from fgdm.application.dto import MonitoringRequest, MonitoringResponse
 from fgdm.domain.drift import detect_drift
@@ -17,6 +17,7 @@ from fgdm.domain.governance import (
 from fgdm.domain.models import (
     CanonicalRow,
     DegradationEvent,
+    DriftResult,
     MetricResult,
     MonitoringReport,
     Offender,
@@ -27,11 +28,7 @@ from fgdm.domain.rolling import (
     compute_metrics,
     split_baseline_current_days,
 )
-from fgdm.domain.validation import (
-    evaluate_validation_breaches,
-    summarize_rows,
-)
-
+from fgdm.domain.validation import evaluate_validation_breaches, summarize_rows
 
 REPORT_SCHEMA_VERSION = "1.1"
 
@@ -61,7 +58,9 @@ def _require_rows(rows: Iterable[CanonicalRow]) -> list[CanonicalRow]:
     return lst
 
 
-def _index_rows(rows: list[CanonicalRow]) -> tuple[list, dict, dict, list[float], list[float]]:
+def _index_rows(
+    rows: list[CanonicalRow],
+) -> tuple[list, dict, dict, list[float], list[float]]:
     days: list = []
     y_by_day: dict = {}
     yhat_by_day: dict = {}
@@ -79,7 +78,11 @@ def _index_rows(rows: list[CanonicalRow]) -> tuple[list, dict, dict, list[float]
     return days, y_by_day, yhat_by_day, y_all, yhat_all
 
 
-def _collect_for_days(y_by_day: dict, yhat_by_day: dict, target_days: list) -> tuple[list[float], list[float], list[float]]:
+def _collect_for_days(
+    y_by_day: dict,
+    yhat_by_day: dict,
+    target_days: list,
+) -> tuple[list[float], list[float], list[float]]:
     y: list[float] = []
     y_hat: list[float] = []
     resid: list[float] = []
@@ -91,7 +94,7 @@ def _collect_for_days(y_by_day: dict, yhat_by_day: dict, target_days: list) -> t
             raise ValidationError(f"Mismatch y/y_hat count on day {d}.")
         y.extend(ys)
         y_hat.extend(yh)
-        resid.extend([a - b for a, b in zip(ys, yh)])
+        resid.extend([a - b for a, b in zip(ys, yh, strict=True)])
 
     return y, y_hat, resid
 
@@ -114,10 +117,14 @@ def _normalize_series_names(series: Iterable[str]) -> list[str]:
         if not name:
             continue
         if name not in allowed:
-            raise ValidationError(f"Unsupported drift series '{name}'. Allowed: {sorted(allowed)}.")
+            raise ValidationError(
+                f"Unsupported drift series '{name}'. Allowed: {sorted(allowed)}."
+            )
         out.append(name)
     if not out:
-        raise ValidationError("drift_series must include at least one of: residual, y, y_hat.")
+        raise ValidationError(
+            "drift_series must include at least one of: residual, y, y_hat."
+        )
     order = {"residual": 0, "y": 1, "y_hat": 2}
     return sorted(set(out), key=lambda x: order[x])
 
@@ -149,7 +156,9 @@ def _compute_top_offenders_current_window(
         if len(y) < min_points:
             continue
         m = compute_metrics(y, y_hat, rolling_eps)
-        offenders.append(Offender(cd_key=k, n_points=len(y), mae=m.mae, rmse=m.rmse, mape=m.mape))
+        offenders.append(
+            Offender(cd_key=k, n_points=len(y), mae=m.mae, rmse=m.rmse, mape=m.mape)
+        )
 
     offenders.sort(key=lambda o: (-o.mae, o.cd_key))
     return offenders[:top_n]
@@ -187,7 +196,11 @@ def _compute_per_key_quality(
     return out
 
 
-def run_monitoring(req: MonitoringRequest, *, generated_at: str | None = None) -> MonitoringResponse:
+def run_monitoring(
+    req: MonitoringRequest,
+    *,
+    generated_at: str | None = None,
+) -> MonitoringResponse:
     if not req.run_id.strip():
         raise ValidationError("run_id must not be empty.")
 
@@ -212,8 +225,16 @@ def run_monitoring(req: MonitoringRequest, *, generated_at: str | None = None) -
         current_window_days=req.rolling.rolling_window_days,
     )
 
-    y_base, yhat_base, resid_base = _collect_for_days(y_by_day, yhat_by_day, baseline_days)
-    y_cur, yhat_cur, resid_cur = _collect_for_days(y_by_day, yhat_by_day, current_days)
+    y_base, yhat_base, resid_base = _collect_for_days(
+        y_by_day,
+        yhat_by_day,
+        baseline_days,
+    )
+    y_cur, yhat_cur, resid_cur = _collect_for_days(
+        y_by_day,
+        yhat_by_day,
+        current_days,
+    )
 
     if len(y_base) < req.rolling.min_points_per_window:
         raise ValidationError(
@@ -245,9 +266,15 @@ def run_monitoring(req: MonitoringRequest, *, generated_at: str | None = None) -
             rel = 0.0 if baseline_val == 0.0 else (delta / baseline_val)
 
             degraded = False
-            if req.rolling.degradation_abs_threshold > 0 and delta >= req.rolling.degradation_abs_threshold:
+            if (
+                req.rolling.degradation_abs_threshold > 0
+                and delta >= req.rolling.degradation_abs_threshold
+            ):
                 degraded = True
-            if req.rolling.degradation_rel_threshold > 0 and rel >= req.rolling.degradation_rel_threshold:
+            if (
+                req.rolling.degradation_rel_threshold > 0
+                and rel >= req.rolling.degradation_rel_threshold
+            ):
                 degraded = True
 
             if degraded:
@@ -276,7 +303,7 @@ def run_monitoring(req: MonitoringRequest, *, generated_at: str | None = None) -
             ),
         )
 
-    drift: dict[str, object] = {}
+    drift: dict[str, DriftResult] = {}
     drift_sev = Severity.OK
     for s in drift_series:
         if s == "residual":
@@ -306,7 +333,10 @@ def run_monitoring(req: MonitoringRequest, *, generated_at: str | None = None) -
 
     overall_sev = max_severity(quality_sev, drift_sev)
 
-    min_points_per_key = max(1, req.rolling.min_points_per_window // max(1, req.rolling.rolling_window_days))
+    min_points_per_key = max(
+        1,
+        req.rolling.min_points_per_window // max(1, req.rolling.rolling_window_days),
+    )
 
     top_offenders = _compute_top_offenders_current_window(
         rows=rows,
@@ -361,7 +391,10 @@ def run_monitoring(req: MonitoringRequest, *, generated_at: str | None = None) -
     notes.append("Rolling series windows with insufficient points are skipped deterministically.")
     notes.append("Drift is computed with KS-test and PSI over selected series.")
     notes.append("Top offenders and per_key_quality are computed on the current window only.")
-    notes.append("Per-key min points is derived from global min_points_per_window and rolling_window_days.")
+    notes.append(
+        "Per-key min points is derived from global min_points_per_window "
+        "and rolling_window_days."
+    )
     if rule_breaches:
         notes.append("Validation rule breaches raise quality severity to at least WARN.")
 
@@ -379,7 +412,7 @@ def run_monitoring(req: MonitoringRequest, *, generated_at: str | None = None) -
         baseline_window_days=req.rolling.baseline_window_days,
         rolling_series=rolling_series,
         degradation_events=events,
-        drift=drift,  # type: ignore[assignment]
+        drift=drift,
         quality_severity=quality_sev,
         drift_severity=drift_sev,
         overall_severity=overall_sev,

@@ -3,7 +3,6 @@ from __future__ import annotations
 import random
 from dataclasses import dataclass
 from datetime import date, timedelta
-from typing import List
 
 from fgdm.domain.models import CanonicalRow
 
@@ -16,31 +15,26 @@ class DemoDatasetConfig:
     drift_start_day: int = 45
 
 
-def generate_demo_dataset(cfg: DemoDatasetConfig) -> List[CanonicalRow]:
-
+def generate_demo_dataset(cfg: DemoDatasetConfig) -> list[CanonicalRow]:
     rng = random.Random(cfg.seed)
-
-    rows: List[CanonicalRow] = []
+    rows: list[CanonicalRow] = []
 
     start = date(2026, 1, 1)
 
     for k in range(cfg.n_keys):
-        key = f"SKU_{k+1:02d}"
+        key = f"SKU_{k + 1:02d}"
 
         for i in range(cfg.n_days):
             ds = start + timedelta(days=i)
 
-            base = 100 + k * 5
-            seasonal = 10 * (i % 7) / 7
-            noise = rng.uniform(-2, 2)
+            base = 100.0 + (k * 5.0)
+            seasonal = 10.0 * (i % 7) / 7.0
+            noise = rng.uniform(-2.0, 2.0)
 
             y = base + seasonal + noise
 
-            drift = 0
-            if i >= cfg.drift_start_day:
-                drift = 10
-
-            y_hat = y - rng.uniform(0, 3) + drift
+            drift = 10.0 if i >= cfg.drift_start_day else 0.0
+            y_hat = y - rng.uniform(0.0, 3.0) + drift
 
             rows.append(
                 CanonicalRow(

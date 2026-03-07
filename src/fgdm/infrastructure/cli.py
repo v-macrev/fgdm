@@ -22,7 +22,6 @@ from fgdm.infrastructure.io import (
 from fgdm.infrastructure.reporting.json_reporter import write_json
 from fgdm.infrastructure.reporting.markdown_reporter import write_markdown
 
-
 SEVERITY_ORDER = {
     "ok": 0,
     "warn": 1,
@@ -37,9 +36,24 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument("--version", action="store_true", help="Print version and exit.")
 
-    p.add_argument("--input", type=str, required=False, help="Path to canonical input (.csv or .parquet).")
-    p.add_argument("--output-dir", type=str, default="fgdm_out", help="Directory for report outputs.")
-    p.add_argument("--run-id", type=str, default="run", help="Run identifier (stable, user-defined).")
+    p.add_argument(
+        "--input",
+        type=str,
+        required=False,
+        help="Path to canonical input (.csv or .parquet).",
+    )
+    p.add_argument(
+        "--output-dir",
+        type=str,
+        default="fgdm_out",
+        help="Directory for report outputs.",
+    )
+    p.add_argument(
+        "--run-id",
+        type=str,
+        default="run",
+        help="Run identifier (stable, user-defined).",
+    )
     p.add_argument(
         "--generated-at",
         type=str,
@@ -54,17 +68,14 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Return non-zero exit code when overall_severity reaches this threshold.",
     )
 
-    # Shared column config
     p.add_argument("--cd-key-col", type=str, default="cd_key")
     p.add_argument("--ds-col", type=str, default="ds")
     p.add_argument("--y-col", type=str, default="y")
     p.add_argument("--y-hat-col", type=str, default="y_hat")
 
-    # CSV-only config
     p.add_argument("--delimiter", type=str, default=",")
     p.add_argument("--encoding", type=str, default="utf-8")
 
-    # Rolling config
     p.add_argument("--rolling-window-days", type=int, default=7)
     p.add_argument("--baseline-window-days", type=int, default=28)
     p.add_argument("--min-points-per-window", type=int, default=30)
@@ -73,7 +84,6 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("--degradation-abs", type=float, default=0.0)
     p.add_argument("--degradation-rel", type=float, default=0.2)
 
-    # Drift config
     p.add_argument("--psi-bins", type=int, default=10)
     p.add_argument(
         "--drift-series",
@@ -82,7 +92,6 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Comma-separated: residual,y,y_hat",
     )
 
-    # Policy config
     p.add_argument("--quality-warn-rel", type=float, default=0.2)
     p.add_argument("--quality-crit-rel", type=float, default=0.5)
     p.add_argument("--drift-warn-psi", type=float, default=0.2)
@@ -91,7 +100,6 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("--drift-crit-ks-p", type=float, default=0.01)
     p.add_argument("--top-offenders-n", type=int, default=10)
 
-    # Validation config
     p.add_argument("--allow-negative-actuals", action="store_true")
     p.add_argument("--allow-negative-predictions", action="store_true")
     p.add_argument("--max-zero-actual-ratio", type=float, default=0.2)
