@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+from enum import Enum
 from pathlib import Path
 
 from fgdm.application.dto import MonitoringRequest
@@ -93,6 +94,22 @@ def _build_parser() -> argparse.ArgumentParser:
     return p
 
 
+def _severity_to_str(value: object) -> str:
+    if isinstance(value, Enum):
+        enum_value = value.value
+        if not isinstance(enum_value, str):
+            raise ValueError(f"Severity enum value must be a string, got: {type(enum_value)!r}")
+        return enum_value
+
+    if isinstance(value, str):
+        lowered = value.lower()
+        if lowered.startswith("severity."):
+            lowered = lowered.split(".", 1)[1]
+        return lowered
+
+    raise ValueError(f"Unsupported severity value type: {type(value)!r}")
+
+
 def _should_fail(overall_severity: str, fail_on: str) -> bool:
     if fail_on == "none":
         return False
@@ -175,7 +192,7 @@ def main(argv: list[str] | None = None) -> int:
         write_json(res.report_dict, json_path)
         write_markdown(res.report_dict, md_path)
 
-        overall_severity = str(res.report_dict["overall_severity"])
+        overall_severity = _severity_to_str(res.report_dict["overall_severity"])
         rule_breaches = res.report_dict.get("rule_breaches", []) or []
 
         print(f"Wrote JSON: {json_path}")

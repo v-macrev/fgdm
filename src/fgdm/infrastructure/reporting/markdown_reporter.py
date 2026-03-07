@@ -1,8 +1,20 @@
 from __future__ import annotations
 
 import json
+from enum import Enum
 from pathlib import Path
 from typing import Any
+
+
+def _severity_to_str(value: Any) -> str:
+    if isinstance(value, Enum):
+        return str(value.value)
+    if isinstance(value, str):
+        lowered = value.lower()
+        if lowered.startswith("severity."):
+            return lowered.split(".", 1)[1]
+        return lowered
+    return str(value)
 
 
 def render_markdown(report: dict[str, Any]) -> str:
@@ -10,9 +22,9 @@ def render_markdown(report: dict[str, Any]) -> str:
     run_id = str(report.get("run_id", ""))
     generated_at = str(report.get("generated_at", ""))
 
-    quality_sev = str((report.get("quality_severity") or ""))
-    drift_sev = str((report.get("drift_severity") or ""))
-    overall_sev = str((report.get("overall_severity") or ""))
+    quality_sev = _severity_to_str(report.get("quality_severity") or "")
+    drift_sev = _severity_to_str(report.get("drift_severity") or "")
+    overall_sev = _severity_to_str(report.get("overall_severity") or "")
 
     config = report.get("config", {}) or {}
     validation_summary = report.get("validation_summary", {}) or {}

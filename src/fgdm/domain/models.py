@@ -5,7 +5,7 @@ from datetime import date
 from typing import Any, Mapping, Sequence
 
 from fgdm.domain.governance import Severity
-from fgdm.domain.validation import ValidationSummary
+from fgdm.domain.validation_models import ValidationSummary
 
 
 @dataclass(frozen=True)

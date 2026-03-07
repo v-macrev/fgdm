@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 
 from fgdm.application.dto import MonitoringRequest
 from fgdm.application.monitoring_service import run_monitoring
@@ -13,9 +13,13 @@ from fgdm.domain.validation import ValidationConfig
 
 def test_smoke_run_monitoring_with_validation_and_policy() -> None:
     rows: list[CanonicalRow] = []
-    for i in range(1, 36):
-        rows.append(CanonicalRow(cd_key="A", ds=date(2026, 1, i), y=float(i), y_hat=float(i) - 2.0))
-        rows.append(CanonicalRow(cd_key="B", ds=date(2026, 1, i), y=float(i), y_hat=float(i) - 0.1))
+    start = date(2026, 1, 1)
+
+    for i in range(35):
+        ds = start + timedelta(days=i)
+        value = float(i + 1)
+        rows.append(CanonicalRow(cd_key="A", ds=ds, y=value, y_hat=value - 2.0))
+        rows.append(CanonicalRow(cd_key="B", ds=ds, y=value, y_hat=value - 0.1))
 
     req = MonitoringRequest(
         run_id="test",
@@ -39,3 +43,5 @@ def test_smoke_run_monitoring_with_validation_and_policy() -> None:
     assert res.report_dict["overall_severity"] in ("ok", "warn", "crit")
     assert "validation_summary" in res.report_dict
     assert "rule_breaches" in res.report_dict
+    assert "top_offenders" in res.report_dict
+    assert "per_key_quality" in res.report_dict

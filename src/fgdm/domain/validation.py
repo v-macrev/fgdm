@@ -1,14 +1,18 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Iterable, Sequence
+from typing import TYPE_CHECKING, Sequence
 
 from fgdm.domain.errors import ValidationError
-from fgdm.domain.models import CanonicalRow
+from fgdm.domain.validation_models import ValidationSummary
+
+if TYPE_CHECKING:
+    from fgdm.domain.models import CanonicalRow
 
 
 @dataclass(frozen=True)
 class ValidationConfig:
+
     allow_negative_actuals: bool = False
     allow_negative_predictions: bool = True
     max_zero_actual_ratio: float = 0.2
@@ -25,22 +29,6 @@ class ValidationConfig:
             raise ValidationError("min_unique_keys must be >= 1.")
         if self.min_unique_days < 1:
             raise ValidationError("min_unique_days must be >= 1.")
-
-
-@dataclass(frozen=True)
-class ValidationSummary:
-    row_count: int
-    unique_keys: int
-    unique_days: int
-
-    duplicate_key_ds_rows: int
-    duplicate_key_ds_ratio: float
-
-    zero_actual_rows: int
-    zero_actual_ratio: float
-
-    negative_actual_rows: int
-    negative_prediction_rows: int
 
 
 def summarize_rows(rows: Sequence[CanonicalRow]) -> ValidationSummary:
