@@ -105,6 +105,17 @@ fgdm --input demo_data/forecast_demo.csv --output-dir demo_output --run-id demo_
 
 For a full walkthrough, see [docs/demo.md](docs/demo.md).
 
+## Developer shortcuts
+
+If you use `make`:
+
+```bash
+make install-dev
+make ci
+make demo
+make demo-run
+```
+
 ## Deterministic execution
 
 FGDM supports reproducible timestamps via:
@@ -157,6 +168,10 @@ Reports include:
 ```bash
 pytest
 ```
+
+## Versioning and release notes
+
+See [CHANGELOG.md](CHANGELOG.md) and [docs/release-checklist.md](docs/release-checklist.md).
 
 ## License
 

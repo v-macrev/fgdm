@@ -5,6 +5,7 @@ import sys
 from enum import Enum
 from pathlib import Path
 
+from fgdm import __version__
 from fgdm.application.dto import MonitoringRequest
 from fgdm.application.monitoring_service import run_monitoring
 from fgdm.domain.drift import DriftConfig
@@ -127,8 +128,6 @@ def main(argv: list[str] | None = None) -> int:
     args = _build_parser().parse_args(argv)
 
     if args.version:
-        from fgdm import __version__
-
         print(__version__)
         return 0
 
@@ -215,6 +214,7 @@ def main(argv: list[str] | None = None) -> int:
         overall_severity = _severity_to_str(res.report_dict["overall_severity"])
         rule_breaches = res.report_dict.get("rule_breaches", []) or []
 
+        print(f"FGDM version: {__version__}")
         print(f"Input format: {input_format}")
         print(f"Wrote JSON: {json_path}")
         print(f"Wrote Markdown: {md_path}")
